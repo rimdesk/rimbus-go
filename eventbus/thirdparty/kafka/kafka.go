@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/confluentinc/confluent-kafka-go/v2/kafka"
-	"github.com/rimdesk/eventbus-go"
+	"github.com/rimdesk/eventbus-go/eventbus"
 	"log"
 	"os"
 )

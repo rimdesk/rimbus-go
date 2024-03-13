@@ -1,8 +1,8 @@
 package eventbus
 
 import (
-	"github.com/rimdesk/eventbus-go/thirdparty/kafka"
-	"github.com/rimdesk/eventbus-go/thirdparty/rabbitmq"
+	"github.com/rimdesk/eventbus-go/eventbus/thirdparty/kafka"
+	"github.com/rimdesk/eventbus-go/eventbus/thirdparty/rabbitmq"
 )
 
 // Inventory Events
