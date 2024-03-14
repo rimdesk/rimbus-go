@@ -1,11 +1,10 @@
-package rabbitmq
+package eventbus
 
 import (
 	"context"
 	"encoding/json"
 	"fmt"
 	amqp "github.com/rabbitmq/amqp091-go"
-	"github.com/rimdesk/eventbus-go/eventbus"
 	"log"
 	"math"
 	"os"
@@ -13,17 +12,18 @@ import (
 )
 
 type MqClient struct {
+	cfg     *BrokerParams
 	engine  *amqp.Connection
 	channel *amqp.Channel
 	queue   amqp.Queue
 }
 
-func (rabbit *MqClient) Subscribe(topic string) (<-chan eventbus.MessageEvent, error) {
+func (rabbit *MqClient) Consume(topic string) (<-chan *MessageEvent, error) {
 	//TODO implement me
 	panic("implement me")
 }
 
-func (rabbit *MqClient) Publish(topic string, message interface{}) error {
+func (rabbit *MqClient) Publish(topic string, message *MessageEvent) error {
 	bodyData, err := json.Marshal(message)
 	if err != nil {
 		return err
@@ -118,4 +118,8 @@ func (rabbit *MqClient) GetDSN() string {
 	log.Printf("RabbitMQ DSN: %s\n", dsn)
 
 	return dsn
+}
+
+func NewRabbitMQClient(params *BrokerParams) MessageBusClient {
+	return &MqClient{cfg: params}
 }
