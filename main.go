@@ -10,7 +10,7 @@ import (
 var ()
 
 func main() {
-	messageClient := eventbus.NewClient(
+	messageClient := eventbus.New(
 		&eventbus.ConfigParams{
 			Engine: "kafka", // rabbitmq, kafka
 			Params: &eventbus.BrokerParams{

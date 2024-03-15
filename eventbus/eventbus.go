@@ -7,25 +7,6 @@ import (
 	"time"
 )
 
-// Inventory Events
-const (
-	InventoryCreatedEvent         string = "inventory.created"
-	InventoryCreateEvent                 = "inventory.create"
-	InventoryDeleteEvent                 = "inventory.delete"
-	InventoryDeletedEvent                = "inventory.deleted"
-	InventoryTrashedEvent                = "inventory.trashed"
-	InventoryQuantityChangedEvent        = "inventory.quantity_changed"
-)
-
-// Product Events
-const (
-	ProductCreateEvent  string = "product.create"
-	ProductCreatedEvent        = "product.created"
-	ProductTrashedEvent        = "product.trashed"
-	ProductDeleteEvent         = "product.delete"
-	ProductDeletedEvent        = "product.deleted"
-)
-
 type MessageBusClient interface {
 	Connect()
 	GetDSN() string
@@ -52,7 +33,7 @@ type ConfigParams struct {
 	Params *BrokerParams `json:"params,omitempty"`
 }
 
-func NewClient(params *ConfigParams) MessageBusClient {
+func New(params *ConfigParams) MessageBusClient {
 	switch strings.ToLower(params.Engine) {
 	case "kafka":
 		return NewKafkaClient(params.Params)
@@ -85,3 +66,32 @@ func (e MessageEvent) String() string {
 	jb, _ := json.Marshal(e)
 	return string(jb)
 }
+
+const (
+	AppAccountingTopic  string = "rimdesk.accounting"
+	AppCompanyTopic            = "rimdesk.company"
+	AppHRTopic                 = "rimdesk.hr"
+	AppInventoryTopic          = "rimdesk.inventory"
+	AppProcurementTopic        = "rimdesk.procurement"
+	AppProductTopic            = "rimdesk.product"
+	AppWarehouseTopic          = "rimdesk.warehouse"
+)
+
+// Inventory Events
+const (
+	InventoryCreateEvent  string = "inventory.create"
+	InventoryCreatedEvent        = "inventory.created"
+	InventoryDeleteEvent         = "inventory.delete"
+	InventoryDeletedEvent        = "inventory.deleted"
+	InventoryChangedEvent        = "inventory.changed"
+	InventoryTrashedEvent        = "inventory.trashed"
+)
+
+// Product Events
+const (
+	ProductCreateEvent  string = "product.create"
+	ProductCreatedEvent        = "product.created"
+	ProductDeleteEvent         = "product.delete"
+	ProductDeletedEvent        = "product.deleted"
+	ProductTrashedEvent        = "product.trashed"
+)
