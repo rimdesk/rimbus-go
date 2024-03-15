@@ -3,17 +3,15 @@ package main
 import (
 	"fmt"
 	"github.com/confluentinc/confluent-kafka-go/v2/kafka"
-	"github.com/rimdesk/eventbus-go/eventbus"
+	"github.com/rimdesk/eventbus-go/rimbus"
 	"log"
 )
 
-var ()
-
 func main() {
-	messageClient := eventbus.NewClient(
-		&eventbus.ConfigParams{
+	client := rimbus.New(
+		&rimbus.ConfigParams{
 			Engine: "kafka", // rabbitmq, kafka
-			Params: &eventbus.BrokerParams{
+			Params: &rimbus.BrokerParams{
 				KafkaConfig: &kafka.ConfigMap{
 					"bootstrap.servers": "0.0.0.0:19092",
 					//"group.id":          "", // product-api
@@ -23,7 +21,7 @@ func main() {
 		},
 	)
 
-	event := eventbus.NewEvent("product-api", "inventory.create", "product.create")
+	event := rimbus.NewEvent("product-api", "inventory.create", "product.create")
 	event.Payload = map[string]any{
 		"company": map[string]any{
 			"id":                  "bb4ef24b-1699-4452-ad09-f284e57c6049",
@@ -36,12 +34,15 @@ func main() {
 			"category_id":         "123",
 		},
 	}
+	event.Metadata = map[string]any{
+		"created_by": "bb4ef24b-1699-4452-ad09-f284e57c6049",
+	}
 
-	if err := messageClient.Publish("rimdesk.products", event); err != nil {
+	if err := client.Publish("rimdesk.products", event); err != nil {
 		log.Fatalln("failed to send message: |", err)
 	}
 
-	messageEvents, err := messageClient.Consume("inventory.create")
+	messageEvents, err := client.Consume("inventory.create")
 	if err != nil {
 		log.Println("failed to consume messages :::::: |", err)
 	}
