@@ -36,7 +36,7 @@ func main() {
 		},
 	}
 	event.Metadata = map[string]any{
-		"created_by": "bb4ef24b-1699-4452-ad09-f284e57c6049",
+		"trigerred_by": "bb4ef24b-1699-4452-ad09-f284e57c6049",
 	}
 
 	if err := client.Publish("rimdesk.products", event); err != nil {
