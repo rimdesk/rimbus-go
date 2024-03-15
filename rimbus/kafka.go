@@ -1,4 +1,4 @@
-package eventbus
+package rimbus
 
 import (
 	"encoding/json"
