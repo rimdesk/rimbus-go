@@ -18,8 +18,9 @@ type MessageBusClient interface {
 type MessageEvent struct {
 	Action      string         `json:"action,omitempty"`
 	Application string         `json:"application,omitempty"`
-	Event       string         `json:"eventType"`
+	Event       string         `json:"event,omitempty"`
 	Payload     map[string]any `json:"payload,omitempty"`
+	Metadata    map[string]any `json:"metadata,omitempty"`
 	Timestamp   int64          `json:"timestamp,omitempty"`
 }
 
@@ -48,6 +49,7 @@ func NewEvent(application, event, action string) *MessageEvent {
 		Application: application,
 		Event:       event,
 		Payload:     nil,
+		Metadata:    nil,
 		Timestamp:   time.Now().UnixMilli(),
 	}
 }
@@ -58,6 +60,7 @@ func NewEventWithPayload(application, event, action string, payload map[string]a
 		Application: application,
 		Event:       event,
 		Payload:     payload,
+		Metadata:    nil,
 		Timestamp:   time.Now().UnixMilli(),
 	}
 }
@@ -68,7 +71,8 @@ func (e MessageEvent) String() string {
 }
 
 const (
-	AppAccountingTopic  string = "rimdesk.accounting"
+	AppAccountTopic     string = "rimdesk.account"
+	AppAccountingTopic         = "rimdesk.accounting"
 	AppCompanyTopic            = "rimdesk.company"
 	AppHRTopic                 = "rimdesk.hr"
 	AppInventoryTopic          = "rimdesk.inventory"
@@ -77,21 +81,48 @@ const (
 	AppWarehouseTopic          = "rimdesk.warehouse"
 )
 
-// Inventory Events
 const (
-	InventoryCreateEvent  string = "inventory.create"
-	InventoryCreatedEvent        = "inventory.created"
-	InventoryDeleteEvent         = "inventory.delete"
-	InventoryDeletedEvent        = "inventory.deleted"
-	InventoryChangedEvent        = "inventory.changed"
-	InventoryTrashedEvent        = "inventory.trashed"
+	InventoryCreateEvent        string = "inventory.create"
+	InventoryCreatedEvent              = "inventory.created"
+	InventoryDeleteEvent               = "inventory.delete"
+	InventoryDeletedEvent              = "inventory.deleted"
+	InventoryChangedEvent              = "inventory.changed"
+	InventoryTrashedEvent              = "inventory.trashed"
+	InventoryExportEvent               = "inventory.exported"
+	InventoryImportEvent               = "inventory.imported"
+	InventoryStockCreatedEvent         = "inventory.stock.created"
+	InventoryStockTransferEvent        = "inventory.stock.transfer"
+	InventoryStockModifiedEvent        = "inventory.stock.modified"
+	InventoryStockReceivedEvent        = "inventory.stock.received"
 )
 
-// Product Events
+const (
+	WarehouseCreateEvent  string = "warehouse.create"
+	WarehouseCreatedEvent        = "warehouse.created"
+)
+
 const (
 	ProductCreateEvent  string = "product.create"
 	ProductCreatedEvent        = "product.created"
 	ProductDeleteEvent         = "product.delete"
 	ProductDeletedEvent        = "product.deleted"
 	ProductTrashedEvent        = "product.trashed"
+)
+
+const (
+	ProfileCreatedEvent  string = "profile.created"
+	ProfileVerifiedEvent        = "profile.verified"
+)
+
+const (
+	SupplierCreatedEvent  string = "supplier.created"
+	SupplierApprovedEvent        = "supplier.approved"
+	SupplierRejectedEvent        = "supplier.rejected"
+)
+
+const (
+	PurchaseOrderCreatedEvent  string = "purchase_order.created"
+	PurchaseOrderReceivedEvent        = "purchase_order.received"
+	PurchaseOrderApprovedEvent        = "purchase_order.approved"
+	PurchaseOrderRejectedEvent        = "purchase_order.rejected"
 )
