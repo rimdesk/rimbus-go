@@ -2,9 +2,10 @@ package main
 
 import (
 	"fmt"
-	"github.com/confluentinc/confluent-kafka-go/v2/kafka"
-	"github.com/rimdesk/eventbus-go/rimbus"
 	"log"
+
+	"github.com/confluentinc/confluent-kafka-go/v2/kafka"
+	"github.com/rimdesk/rimbus-go/rimbus"
 )
 
 func main() {

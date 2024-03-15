@@ -1,4 +1,4 @@
-module github.com/rimdesk/eventbus-go
+module github.com/rimdesk/rimbus-go
 
 go 1.21
 
