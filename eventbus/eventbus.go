@@ -9,18 +9,18 @@ import (
 
 type MessageBusClient interface {
 	Connect()
+	Consume(topic string) (<-chan *MessageEvent, error)
 	GetDSN() string
 	GetEngine() interface{}
 	Publish(topic string, message *MessageEvent) error
-	Consume(topic string) (<-chan *MessageEvent, error)
 }
 
 type MessageEvent struct {
 	Action      string         `json:"action,omitempty"`
 	Application string         `json:"application,omitempty"`
 	Event       string         `json:"event,omitempty"`
-	Payload     map[string]any `json:"payload,omitempty"`
 	Metadata    map[string]any `json:"metadata,omitempty"`
+	Payload     map[string]any `json:"payload,omitempty"`
 	Timestamp   int64          `json:"timestamp,omitempty"`
 }
 
@@ -48,8 +48,8 @@ func NewEvent(application, event, action string) *MessageEvent {
 		Action:      action,
 		Application: application,
 		Event:       event,
-		Payload:     nil,
 		Metadata:    nil,
+		Payload:     nil,
 		Timestamp:   time.Now().UnixMilli(),
 	}
 }
@@ -59,8 +59,8 @@ func NewEventWithPayload(application, event, action string, payload map[string]a
 		Action:      action,
 		Application: application,
 		Event:       event,
-		Payload:     payload,
 		Metadata:    nil,
+		Payload:     payload,
 		Timestamp:   time.Now().UnixMilli(),
 	}
 }
@@ -71,29 +71,32 @@ func (e MessageEvent) String() string {
 }
 
 const (
-	AppAccountTopic     string = "rimdesk.account"
-	AppAccountingTopic         = "rimdesk.accounting"
-	AppCompanyTopic            = "rimdesk.company"
-	AppHRTopic                 = "rimdesk.hr"
-	AppInventoryTopic          = "rimdesk.inventory"
-	AppProcurementTopic        = "rimdesk.procurement"
-	AppProductTopic            = "rimdesk.product"
-	AppWarehouseTopic          = "rimdesk.warehouse"
+	AppAccountTopic       string = "rimdesk.account"
+	AppAccountingTopic           = "rimdesk.accounting"
+	AppCompanyTopic              = "rimdesk.company"
+	AppHRTopic                   = "rimdesk.hr"
+	AppInventoryTopic            = "rimdesk.inventory"
+	AppProcurementTopic          = "rimdesk.procurement"
+	AppProductTopic              = "rimdesk.product"
+	AppProfileTopic              = "rimdesk.profile"
+	AppPurchaseOrderTopic        = "rimdesk.purchase_order"
+	AppSupplierTopic             = "rimdesk.supplier"
+	AppWarehouseTopic            = "rimdesk.warehouse"
 )
 
 const (
-	InventoryCreateEvent        string = "inventory.create"
+	InventoryChangedEvent       string = "inventory.changed"
+	InventoryCreateEvent               = "inventory.create"
 	InventoryCreatedEvent              = "inventory.created"
 	InventoryDeleteEvent               = "inventory.delete"
 	InventoryDeletedEvent              = "inventory.deleted"
-	InventoryChangedEvent              = "inventory.changed"
-	InventoryTrashedEvent              = "inventory.trashed"
 	InventoryExportEvent               = "inventory.exported"
 	InventoryImportEvent               = "inventory.imported"
 	InventoryStockCreatedEvent         = "inventory.stock.created"
-	InventoryStockTransferEvent        = "inventory.stock.transfer"
 	InventoryStockModifiedEvent        = "inventory.stock.modified"
 	InventoryStockReceivedEvent        = "inventory.stock.received"
+	InventoryStockTransferEvent        = "inventory.stock.transfer"
+	InventoryTrashedEvent              = "inventory.trashed"
 )
 
 const (
@@ -115,14 +118,14 @@ const (
 )
 
 const (
-	SupplierCreatedEvent  string = "supplier.created"
-	SupplierApprovedEvent        = "supplier.approved"
+	SupplierApprovedEvent string = "supplier.approved"
+	SupplierCreatedEvent         = "supplier.created"
 	SupplierRejectedEvent        = "supplier.rejected"
 )
 
 const (
-	PurchaseOrderCreatedEvent  string = "purchase_order.created"
+	PurchaseOrderApprovedEvent string = "purchase_order.approved"
+	PurchaseOrderCreatedEvent         = "purchase_order.created"
 	PurchaseOrderReceivedEvent        = "purchase_order.received"
-	PurchaseOrderApprovedEvent        = "purchase_order.approved"
 	PurchaseOrderRejectedEvent        = "purchase_order.rejected"
 )
