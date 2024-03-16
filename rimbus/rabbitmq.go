@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/confluentinc/confluent-kafka-go/v2/kafka"
 	amqp "github.com/rabbitmq/amqp091-go"
 	"log"
 	"math"
@@ -11,38 +12,38 @@ import (
 	"time"
 )
 
-type MqClient struct {
-	cfg     *BrokerParams
+type RabbitMqClient struct {
+	cfg     *Params
 	engine  *amqp.Connection
 	channel *amqp.Channel
 	queue   amqp.Queue
 }
 
-func (rabbit *MqClient) Consume(topic string) (<-chan *MessageEvent, error) {
+func (rabbit *RabbitMqClient) Consume(topic string) (<-chan *MessageEvent, error) {
 	//TODO implement me
 	panic("implement me")
 }
 
-func (rabbit *MqClient) Publish(topic string, message *MessageEvent) error {
+func (rabbit *RabbitMqClient) Publish(topic string, message *MessageEvent) (chan kafka.Event, error) {
 	bodyData, err := json.Marshal(message)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	if err := rabbit.channel.PublishWithContext(context.Background(), os.Getenv("BROKER.EXCHANGE"),
 		rabbit.queue.Name, false, false, amqp.Publishing{ContentType: "application/json", Body: bodyData}); err != nil {
-		return err
+		return nil, err
 	}
 
 	log.Printf("--- Sending to Queue: %s ---\n --- [x] Send %s--- \n", rabbit.queue.Name, message)
-	return nil
+	return nil, nil
 }
 
-func (rabbit *MqClient) GetEngine() interface{} {
+func (rabbit *RabbitMqClient) GetEngine() interface{} {
 	return rabbit.engine
 }
 
-func (rabbit *MqClient) Connect() {
+func (rabbit *RabbitMqClient) Connect() {
 	var counts int64
 	var backOff = 1 * time.Second
 
@@ -78,7 +79,7 @@ func (rabbit *MqClient) Connect() {
 	}
 }
 
-func (rabbit *MqClient) createChannel() error {
+func (rabbit *RabbitMqClient) createChannel() error {
 	var err error
 	rabbit.channel, err = rabbit.engine.Channel()
 	if err != nil {
@@ -88,7 +89,7 @@ func (rabbit *MqClient) createChannel() error {
 	return nil
 }
 
-func (rabbit *MqClient) createQueue() error {
+func (rabbit *RabbitMqClient) createQueue() error {
 	var err error
 	rabbit.queue, err = rabbit.channel.QueueDeclare(
 		os.Getenv("BROKER.QUEUE"),
@@ -105,7 +106,7 @@ func (rabbit *MqClient) createQueue() error {
 	return nil
 }
 
-func (rabbit *MqClient) GetDSN() string {
+func (rabbit *RabbitMqClient) GetDSN() string {
 	log.Println("Building RabbitMQ DSN in parts")
 	dsn := fmt.Sprintf("%s://%s:%s@%s:%s",
 		os.Getenv("BROKER.PROTOCOL"),
@@ -120,6 +121,6 @@ func (rabbit *MqClient) GetDSN() string {
 	return dsn
 }
 
-func NewRabbitMQClient(params *BrokerParams) MessageBusClient {
-	return &MqClient{cfg: params}
+func NewRabbitMQClient(params *Params) MessageBusClient {
+	return &RabbitMqClient{cfg: params}
 }
