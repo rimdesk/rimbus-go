@@ -4,46 +4,46 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/confluentinc/confluent-kafka-go/v2/kafka"
 	"github.com/rimdesk/rimbus-go/rimbus"
 )
 
 func main() {
 	client := rimbus.New(
-		&rimbus.ConfigParams{
+		&rimbus.Params{
 			Engine: "kafka", // rabbitmq, kafka
-			Params: &rimbus.BrokerParams{
-				KafkaConfig: &kafka.ConfigMap{
-					"bootstrap.servers": "0.0.0.0:19092",
-					//"group.id":          "", // product-api
-					//"auto.offset.reset": "earliest",
-				},
+			File:   "client.properties",
+			Map: map[string]any{
+				"bootstrap.servers": "0.0.0.0:19092",
+				"group.id":          "product-api", // product-api
+				"auto.offset.reset": "earliest",
 			},
 		},
 	)
 
-	event := rimbus.NewEvent("product-api", "inventory.create", "product.create")
+	event := rimbus.NewEvent(rimbus.ProductApi, rimbus.InventoryCreateEvent, rimbus.ProductCreateEvent)
 	event.Payload = map[string]any{
-		"company": map[string]any{
-			"id":                  "bb4ef24b-1699-4452-ad09-f284e57c6049",
-			"name":                "Acme Corporation",
-			"email":               "contact@acme.com",
-			"phone_number":        "+1234567890",
-			"tin_number":          "1234567890",
-			"registration_number": "ACME123",
-			"currency":            "USD",
-			"category_id":         "123",
+		"product": map[string]any{
+			"id":           "bb4ef24b-1699-4452-ad09-f284e57c6049",
+			"barcode":      "00022233444",
+			"name":         "Apple iPhone Charger",
+			"description":  "Apple iPhone Charger Description",
+			"supply_price": 800,
+			"retail_price": 1000,
+			"type":         "product",
+			"amount":       1200,
+			"category_id":  "123",
+			"company_id":   "3ec34288-5ce8-4974-b05e-6e50a32465bb",
 		},
 	}
 	event.Metadata = map[string]any{
-		"trigerred_by": "bb4ef24b-1699-4452-ad09-f284e57c6049",
+		"triggered_by": "bb4ef24b-1699-4452-ad09-f284e57c6049",
 	}
 
-	if err := client.Publish("rimdesk.products", event); err != nil {
+	if _, err := client.Publish(rimbus.AppProductTopic, event); err != nil {
 		log.Fatalln("failed to send message: |", err)
 	}
 
-	messageEvents, err := client.Consume("inventory.create")
+	messageEvents, err := client.Consume(rimbus.AppProductTopic)
 	if err != nil {
 		log.Println("failed to consume messages :::::: |", err)
 	}

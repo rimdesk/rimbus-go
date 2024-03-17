@@ -12,7 +12,7 @@ type MessageBusClient interface {
 	Consume(topic string) (<-chan *MessageEvent, error)
 	GetDSN() string
 	GetEngine() interface{}
-	Publish(topic string, message *MessageEvent) error
+	Publish(topic string, message *MessageEvent) (chan kafka.Event, error)
 }
 
 type MessageEvent struct {
@@ -24,22 +24,18 @@ type MessageEvent struct {
 	Timestamp   int64          `json:"timestamp,omitempty"`
 }
 
-type BrokerParams struct {
-	Connection  string           `json:"connection,omitempty"`
-	KafkaConfig *kafka.ConfigMap `json:"configMap,omitempty"`
+type Params struct {
+	Engine string         `json:"engine,omitempty"`
+	Map    map[string]any `json:"configMap,omitempty"`
+	File   string         `json:"config_file,omitempty"`
 }
 
-type ConfigParams struct {
-	Engine string        `json:"engine,omitempty"`
-	Params *BrokerParams `json:"params,omitempty"`
-}
-
-func New(params *ConfigParams) MessageBusClient {
+func New(params *Params) MessageBusClient {
 	switch strings.ToLower(params.Engine) {
 	case "kafka":
-		return NewKafkaClient(params.Params)
+		return NewKafkaClient(params)
 	default:
-		return NewRabbitMQClient(params.Params)
+		return NewRabbitMQClient(params)
 	}
 }
 
@@ -128,4 +124,17 @@ const (
 	PurchaseOrderCreatedEvent         = "purchase_order.created"
 	PurchaseOrderReceivedEvent        = "purchase_order.received"
 	PurchaseOrderRejectedEvent        = "purchase_order.rejected"
+)
+
+const (
+	AccountServiceApi string = "accounting-api"
+	CompanyApi               = "company-api"
+	HRApi                    = "hr-api"
+	InventoryApi             = "inventory-api"
+	ProcurementApi           = "procurement-api"
+	ProductApi               = "product-api"
+	ProfileApi               = "profile-api"
+	PurchaseOrderApi         = "purchase-order-api"
+	SupplierApi              = "supplier-api"
+	WarehouseApi             = "warehouse-api"
 )

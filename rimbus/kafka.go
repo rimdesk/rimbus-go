@@ -1,22 +1,25 @@
 package rimbus
 
 import (
+	"bufio"
 	"encoding/json"
 	"fmt"
 	"github.com/confluentinc/confluent-kafka-go/v2/kafka"
 	"log"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 )
 
 type KClient struct {
-	cfg *BrokerParams
+	cfg *Params
 }
 
 func (client *KClient) Consume(topic string) (<-chan *MessageEvent, error) {
-	consumer, err := kafka.NewConsumer(client.cfg.KafkaConfig)
+	log.Printf("<[🔥]> Consuming messages from topic ::::: | %s <[🔥]> \n", topic)
+	consumer, err := kafka.NewConsumer(client.getConfig())
 	if err != nil {
 		log.Println("‼️failed to register consumer ::::: |", err)
 		return nil, err
@@ -55,7 +58,7 @@ func (client *KClient) Consume(topic string) (<-chan *MessageEvent, error) {
 			}
 
 			messageEvents <- evt
-			fmt.Printf("[👽] Message processed to the channel :::::: | %s [👽]\n", message.TopicPartition.String())
+			log.Printf("[👽] Message processed to the channel :::::: | %s [👽]\n", message.TopicPartition.String())
 		}
 	}
 
@@ -76,18 +79,18 @@ func (client *KClient) GetEngine() interface{} {
 	return nil
 }
 
-func (client *KClient) Publish(topic string, message *MessageEvent) error {
-	producer, err := kafka.NewProducer(client.cfg.KafkaConfig)
+func (client *KClient) Publish(topic string, message *MessageEvent) (chan kafka.Event, error) {
+	producer, err := kafka.NewProducer(client.getConfig())
 	if err != nil {
 		log.Println("‼️failed to create producer ::::: |", err)
-		return err
+		return nil, err
 	}
 
 	log.Printf("<[🔥]> Sending message to topic: %s <[🔥]>\n", topic)
 	jb, err := json.Marshal(message)
 	if err != nil {
 		log.Println("‼️failed to marshal data ::::: |", err)
-		return err
+		return nil, err
 	}
 
 	deliveryChan := make(chan kafka.Event, 10000)
@@ -97,7 +100,7 @@ func (client *KClient) Publish(topic string, message *MessageEvent) error {
 		Timestamp:      time.Now(),
 	}, deliveryChan); err != nil {
 		log.Println("‼️failed to send message into topic ::::: |", err)
-		return err
+		return nil, err
 	}
 
 	e := <-deliveryChan
@@ -105,15 +108,67 @@ func (client *KClient) Publish(topic string, message *MessageEvent) error {
 
 	if m.TopicPartition.Error != nil {
 		log.Printf("‼️delivery topic partition failed: %v\n", m.TopicPartition.Error)
-		return m.TopicPartition.Error
+		return nil, m.TopicPartition.Error
 	}
 
 	log.Printf("<[✈️]> Message sent to topic %s [%d] at offset %v <[✈️]>\n", *m.TopicPartition.Topic, m.TopicPartition.Partition, m.TopicPartition.Offset)
 
 	close(deliveryChan)
-	return nil
+	return deliveryChan, nil
 }
 
-func NewKafkaClient(p *BrokerParams) MessageBusClient {
-	return &KClient{cfg: p}
+func (client *KClient) readConfigFile(configFile string) kafka.ConfigMap {
+	m := make(map[string]kafka.ConfigValue)
+
+	file, err := os.Open(configFile)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to open file: %s", err)
+		os.Exit(1)
+	}
+	defer file.Close()
+
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if !strings.HasPrefix(line, "#") && len(line) != 0 {
+			before, after, found := strings.Cut(line, "=")
+			if found {
+				parameter := strings.TrimSpace(before)
+				value := strings.TrimSpace(after)
+				m[parameter] = value
+			}
+		}
+	}
+
+	if err := scanner.Err(); err != nil {
+		fmt.Printf("Failed to read file: %s", err)
+		os.Exit(1)
+	}
+
+	return m
+}
+
+func (client *KClient) readFromMap(data map[string]any) kafka.ConfigMap {
+	cfgMap := make(map[string]kafka.ConfigValue)
+	for s, a := range data {
+		cfgMap[s] = a
+	}
+
+	return cfgMap
+}
+
+func (client *KClient) getConfig() *kafka.ConfigMap {
+	var cfgMap kafka.ConfigMap
+	if client.cfg.File != "" {
+		cfgMap = client.readConfigFile(client.cfg.File)
+		return &cfgMap
+	}
+
+	cfgMap = client.readFromMap(client.cfg.Map)
+
+	return &cfgMap
+}
+
+func NewKafkaClient(p *Params) MessageBusClient {
+	return &KClient{p}
 }
