@@ -1,25 +1,23 @@
 package rimbus
 
 import (
-	"bufio"
 	"encoding/json"
-	"fmt"
 	"github.com/confluentinc/confluent-kafka-go/v2/kafka"
 	"log"
 	"os"
 	"os/signal"
-	"strings"
 	"syscall"
 	"time"
 )
 
-type KClient struct {
-	cfg *Params
+type KafkaClient struct {
+	cfg *KafkaConfig
 }
 
-func (client *KClient) Consume(topic string) (<-chan *MessageEvent, error) {
+func (client *KafkaClient) Consume(topic string) (<-chan *MessageEvent, error) {
 	log.Printf("<[🔥]> Consuming messages from topic ::::: | %s <[🔥]> \n", topic)
-	consumer, err := kafka.NewConsumer(client.getConfig())
+	configMap := client.getConfig("consumer")
+	consumer, err := kafka.NewConsumer(&configMap)
 	if err != nil {
 		log.Println("‼️failed to register consumer ::::: |", err)
 		return nil, err
@@ -67,20 +65,21 @@ func (client *KClient) Consume(topic string) (<-chan *MessageEvent, error) {
 	return messageEvents, nil
 }
 
-func (client *KClient) Connect() {
+func (client *KafkaClient) Connect() {
 }
 
-func (client *KClient) GetDSN() string {
+func (client *KafkaClient) GetDSN() string {
 	//TODO implement me
 	panic("implement me")
 }
 
-func (client *KClient) GetEngine() interface{} {
+func (client *KafkaClient) GetEngine() interface{} {
 	return nil
 }
 
-func (client *KClient) Publish(topic string, message *MessageEvent) (chan kafka.Event, error) {
-	producer, err := kafka.NewProducer(client.getConfig())
+func (client *KafkaClient) Publish(topic string, message *MessageEvent) (chan kafka.Event, error) {
+	configMap := client.getConfig("producer")
+	producer, err := kafka.NewProducer(&configMap)
 	if err != nil {
 		log.Println("‼️failed to create producer ::::: |", err)
 		return nil, err
@@ -117,58 +116,27 @@ func (client *KClient) Publish(topic string, message *MessageEvent) (chan kafka.
 	return deliveryChan, nil
 }
 
-func (client *KClient) readConfigFile(configFile string) kafka.ConfigMap {
-	m := make(map[string]kafka.ConfigValue)
-
-	file, err := os.Open(configFile)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to open file: %s", err)
-		os.Exit(1)
-	}
-	defer file.Close()
-
-	scanner := bufio.NewScanner(file)
-	for scanner.Scan() {
-		line := strings.TrimSpace(scanner.Text())
-		if !strings.HasPrefix(line, "#") && len(line) != 0 {
-			before, after, found := strings.Cut(line, "=")
-			if found {
-				parameter := strings.TrimSpace(before)
-				value := strings.TrimSpace(after)
-				m[parameter] = value
-			}
-		}
-	}
-
-	if err := scanner.Err(); err != nil {
-		fmt.Printf("Failed to read file: %s", err)
-		os.Exit(1)
-	}
-
-	return m
-}
-
-func (client *KClient) readFromMap(data map[string]any) kafka.ConfigMap {
+func (client *KafkaClient) getConfig(key string) kafka.ConfigMap {
 	cfgMap := make(map[string]kafka.ConfigValue)
-	for s, a := range data {
-		cfgMap[s] = a
+	cfgMap["bootstrap.servers"] = client.cfg.Servers
+
+	log.Printf("Kafka Servers: %s\n", client.cfg.Servers)
+
+	if key == "consumer" {
+		log.Printf("Kafka Consumer Group: %s\n", client.cfg.Consumer.Group)
+		log.Printf("Kafka Consumer Start: %s\n", client.cfg.Consumer.Start)
+
+		cfgMap["group.id"] = client.cfg.Consumer.Group
+		cfgMap["auto.offset.reset"] = client.cfg.Consumer.Start
+	}
+
+	if key == "producer" {
+		// Load producer configuration: client.cfg.Producer
 	}
 
 	return cfgMap
 }
 
-func (client *KClient) getConfig() *kafka.ConfigMap {
-	var cfgMap kafka.ConfigMap
-	if client.cfg.File != "" {
-		cfgMap = client.readConfigFile(client.cfg.File)
-		return &cfgMap
-	}
-
-	cfgMap = client.readFromMap(client.cfg.Map)
-
-	return &cfgMap
-}
-
-func NewKafkaClient(p *Params) MessageBusClient {
-	return &KClient{p}
+func NewKafkaClient(p *KafkaConfig) MessageBusClient {
+	return &KafkaClient{p}
 }

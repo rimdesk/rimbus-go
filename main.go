@@ -2,24 +2,12 @@ package main
 
 import (
 	"fmt"
-	"log"
-
 	"github.com/rimdesk/rimbus-go/rimbus"
+	"log"
 )
 
 func main() {
-	client := rimbus.New(
-		&rimbus.Params{
-			Engine: "kafka", // rabbitmq, kafka
-			File:   "client.properties",
-			Map: map[string]any{
-				"bootstrap.servers": "0.0.0.0:19092",
-				"group.id":          "product-api", // product-api
-				"auto.offset.reset": "earliest",
-			},
-		},
-	)
-
+	client := rimbus.New()
 	event := rimbus.NewEvent(rimbus.ProductApi, rimbus.InventoryCreateEvent, rimbus.ProductCreateEvent)
 	event.Payload = map[string]any{
 		"product": map[string]any{
@@ -39,9 +27,12 @@ func main() {
 		"triggered_by": "bb4ef24b-1699-4452-ad09-f284e57c6049",
 	}
 
-	if _, err := client.Publish(rimbus.AppProductTopic, event); err != nil {
+	evt, err := client.Publish(rimbus.AppProductTopic, event)
+	if err != nil {
 		log.Fatalln("failed to send message: |", err)
 	}
+
+	log.Println("Published event ::::: |", evt)
 
 	messageEvents, err := client.Consume(rimbus.AppProductTopic)
 	if err != nil {

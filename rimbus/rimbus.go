@@ -3,6 +3,8 @@ package rimbus
 import (
 	"encoding/json"
 	"github.com/confluentinc/confluent-kafka-go/v2/kafka"
+	"github.com/spf13/viper"
+	"log"
 	"strings"
 	"time"
 )
@@ -24,19 +26,65 @@ type MessageEvent struct {
 	Timestamp   int64          `json:"timestamp,omitempty"`
 }
 
-type Params struct {
-	Engine string         `json:"engine,omitempty"`
-	Map    map[string]any `json:"configMap,omitempty"`
-	File   string         `json:"config_file,omitempty"`
+func New() MessageBusClient {
+	config := getConfig()
+	switch strings.ToLower(config.Default.Engine) {
+	case "kafka":
+		return NewKafkaClient(config.Kafka)
+	default:
+		return NewRabbitMQClient(config.RabbitMQ)
+	}
 }
 
-func New(params *Params) MessageBusClient {
-	switch strings.ToLower(params.Engine) {
-	case "kafka":
-		return NewKafkaClient(params)
-	default:
-		return NewRabbitMQClient(params)
+type DefaultConfig struct {
+	Engine string `mapstructure:"engine"`
+}
+
+type KafkaConfig struct {
+	Servers  string   `mapstructure:"servers"`
+	Producer struct{} // Empty struct to handle empty sections
+	Consumer struct {
+		Group string `mapstructure:"group"`
+		Start string `mapstructure:"start"`
+	} `mapstructure:"consumer"`
+}
+
+type RabbitMQConfig struct {
+	Host     string `mapstructure:"host"`
+	Topic    string `mapstructure:"topic"`
+	Exchange string `mapstructure:"exchange"`
+}
+
+// Config represents the TOML configuration structure
+type Config struct {
+	Default  *DefaultConfig  `mapstructure:"default"`
+	Kafka    *KafkaConfig    `mapstructure:"kafka"`
+	RabbitMQ *RabbitMQConfig `mapstructure:"rabbitmq"`
+}
+
+func getConfig() *Config {
+	// Set the file name (config.toml) and path (current directory)
+	viper.SetConfigName("config")
+	viper.SetConfigType("toml")
+	viper.AddConfigPath(".")
+
+	// Read the TOML configuration file
+	if err := viper.ReadInConfig(); err != nil {
+		log.Fatalf("‼️Error reading config file: %v", err)
 	}
+
+	// Define a variable to store the configuration
+	var cfg Config
+
+	// Unmarshal the configuration into the struct
+	if err := viper.Unmarshal(&cfg); err != nil {
+		log.Fatalf("‼️Error unmarshalling config: %v", err)
+	}
+
+	// Print out the parsed values
+	log.Printf("Engine: %s\n", cfg.Default.Engine)
+
+	return &cfg
 }
 
 func NewEvent(application, event, action string) *MessageEvent {
