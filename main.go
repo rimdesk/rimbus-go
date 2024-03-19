@@ -27,17 +27,16 @@ func main() {
 		"triggered_by": "bb4ef24b-1699-4452-ad09-f284e57c6049",
 	}
 
-	_, err := client.Publish(rimbus.AppProductTopic, event)
-	if err != nil {
+	if _, err := client.Publish(rimbus.AppProductTopic, event); err != nil {
 		log.Fatalln("failed to send message: |", err)
 	}
 
-	//messageEvents, err := client.Consume(rimbus.AppProductTopic)
-	//if err != nil {
-	//	log.Println("failed to consume messages :::::: |", err)
-	//}
-	//
-	//for message := range messageEvents {
-	//	log.Println("Message received :::::: |", message)
-	//}
+	messageEvents, err := client.Consume(rimbus.AppProductTopic)
+	if err != nil {
+		log.Println("failed to consume messages :::::: |", err)
+	}
+
+	for message := range messageEvents {
+		log.Println("Message received :::::: |", message)
+	}
 }

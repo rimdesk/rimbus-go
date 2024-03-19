@@ -82,19 +82,19 @@ func (client *KafkaClient) GetEngine() interface{} {
 	return nil
 }
 
-func (client *KafkaClient) Publish(topic string, message *MessageEvent) (chan kafka.Event, error) {
+func (client *KafkaClient) Publish(topic string, message *MessageEvent) (bool, error) {
 	configMap := client.getConfig("producer")
 	producer, err := kafka.NewProducer(&configMap)
 	if err != nil {
 		log.Println("‼️failed to create producer ::::: |", err)
-		return nil, err
+		return false, err
 	}
 
 	log.Printf("<[🔥]> Sending message to topic: %s <[🔥]>\n", topic)
 	jb, err := json.Marshal(message)
 	if err != nil {
 		log.Println("‼️failed to marshal data ::::: |", err)
-		return nil, err
+		return false, err
 	}
 
 	deliveryChan := make(chan kafka.Event, 10000)
@@ -104,7 +104,7 @@ func (client *KafkaClient) Publish(topic string, message *MessageEvent) (chan ka
 		Timestamp:      time.Now(),
 	}, deliveryChan); err != nil {
 		log.Println("‼️failed to send message into topic ::::: |", err)
-		return nil, err
+		return false, err
 	}
 
 	e := <-deliveryChan
@@ -112,13 +112,14 @@ func (client *KafkaClient) Publish(topic string, message *MessageEvent) (chan ka
 
 	if m.TopicPartition.Error != nil {
 		log.Printf("‼️delivery topic partition failed: %v\n", m.TopicPartition.Error)
-		return nil, m.TopicPartition.Error
+		return false, m.TopicPartition.Error
 	}
 
 	log.Printf("<[✈️]> Message sent to topic %s [%d] at offset %v <[✈️]>\n", *m.TopicPartition.Topic, m.TopicPartition.Partition, m.TopicPartition.Offset)
 
 	close(deliveryChan)
-	return deliveryChan, nil
+
+	return true, nil
 }
 
 func (client *KafkaClient) getConfig(key string) kafka.ConfigMap {

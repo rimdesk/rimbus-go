@@ -2,7 +2,6 @@ package rimbus
 
 import (
 	"encoding/json"
-	"github.com/confluentinc/confluent-kafka-go/v2/kafka"
 	"github.com/spf13/viper"
 	"log"
 	"strings"
@@ -14,7 +13,15 @@ type MessageBusClient interface {
 	Consume(topic string) (<-chan *MessageEvent, error)
 	GetDSN() string
 	GetEngine() interface{}
-	Publish(topic string, message *MessageEvent) (chan kafka.Event, error)
+	Publish(topic string, message *MessageEvent) (bool, error)
+}
+
+type BusEventResponse struct {
+}
+
+func (b BusEventResponse) String() string {
+	jb, _ := json.Marshal(b)
+	return string(jb)
 }
 
 type MessageEvent struct {

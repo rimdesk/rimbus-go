@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/confluentinc/confluent-kafka-go/v2/kafka"
 	amqp "github.com/rabbitmq/amqp091-go"
 	"log"
 	"math"
@@ -80,7 +79,7 @@ func (client *RabbitMqClient) Consume(topic string) (<-chan *MessageEvent, error
 					}
 
 					messageEvents <- evt
-					log.Printf("[👽] Message processed to the channel :::::: | %s [👽]\n", msg.RoutingKey)
+					log.Printf("<[✈️]> Message sent to topic %s <[✈️]>\n", msg.RoutingKey)
 				}
 			}
 		}
@@ -89,7 +88,7 @@ func (client *RabbitMqClient) Consume(topic string) (<-chan *MessageEvent, error
 	return messageEvents, nil
 }
 
-func (client *RabbitMqClient) Publish(topic string, message *MessageEvent) (chan kafka.Event, error) {
+func (client *RabbitMqClient) Publish(topic string, message *MessageEvent) (bool, error) {
 	// We create a Queue to send the message to.
 	queue, err := client.channel.QueueDeclare(
 		topic, // name
@@ -102,16 +101,16 @@ func (client *RabbitMqClient) Publish(topic string, message *MessageEvent) (chan
 
 	jb, err := json.Marshal(message)
 	if err != nil {
-		return nil, err
+		return false, err
 	}
 
 	if err := client.channel.PublishWithContext(context.Background(), client.cfg.Exchange,
 		queue.Name, false, false, amqp.Publishing{ContentType: "application/json", Body: jb}); err != nil {
-		return nil, err
+		return false, err
 	}
 
 	log.Printf("--- Sending to Queue: %s ---\n --- [x] Send %s--- \n", queue.Name, message)
-	return nil, nil
+	return true, nil
 }
 
 func (client *RabbitMqClient) GetEngine() interface{} {
