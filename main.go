@@ -1,13 +1,13 @@
 package main
 
 import (
-	"fmt"
 	"github.com/rimdesk/rimbus-go/rimbus"
 	"log"
 )
 
 func main() {
 	client := rimbus.New()
+	client.EstablishConnection() // Only for RabbitMQ
 	event := rimbus.NewEvent(rimbus.ProductApi, rimbus.InventoryCreateEvent, rimbus.ProductCreateEvent)
 	event.Payload = map[string]any{
 		"product": map[string]any{
@@ -27,19 +27,17 @@ func main() {
 		"triggered_by": "bb4ef24b-1699-4452-ad09-f284e57c6049",
 	}
 
-	evt, err := client.Publish(rimbus.AppProductTopic, event)
+	_, err := client.Publish(rimbus.AppProductTopic, event)
 	if err != nil {
 		log.Fatalln("failed to send message: |", err)
 	}
 
-	log.Println("Published event ::::: |", evt)
-
-	messageEvents, err := client.Consume(rimbus.AppProductTopic)
-	if err != nil {
-		log.Println("failed to consume messages :::::: |", err)
-	}
-
-	for message := range messageEvents {
-		fmt.Println("Message received :::::: |", message)
-	}
+	//messageEvents, err := client.Consume(rimbus.AppProductTopic)
+	//if err != nil {
+	//	log.Println("failed to consume messages :::::: |", err)
+	//}
+	//
+	//for message := range messageEvents {
+	//	log.Println("Message received :::::: |", message)
+	//}
 }

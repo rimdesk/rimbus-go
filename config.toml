@@ -3,15 +3,29 @@ engine = "kafka"
 
 [kafka]
 servers = "localhost:19092"
+auth_required = true
+
+[kafka.auth]
+sasl_security_protocol = "SASL_PLAINTEXT"
+sasl_mechanism = "SCRAM-SHA-256"
+username = ""
+password = ""
+
+[kafka.extras]
+jaas_config = "apache.kafka.common.security.scram.ScramLoginModule required"
 
 [kafka.producer]
-
 
 [kafka.consumer]
 group = "product-api"
 start = "earliest"
 
 [rabbitmq]
-host = "localhost:5672"
-queue = "rimdesk.product"
-exchange = "rimdesk.product.exchange"
+host = "localhost"
+port = "5672"
+exchange = ""
+protocol = "amqp"
+
+[rabbitmq.auth]
+username = "guest"
+password = "guest"
