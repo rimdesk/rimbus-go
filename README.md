@@ -1,17 +1,8 @@
 # RIMBus Go Client
 
 Creating a new rimbus client to dispatch messages
-```
-client := rimbus.New(&rimbus.ConfigParams{
-    Engine: "kafka", // rabbitmq, kafka
-        Params: &rimbus.BrokerParams{
-            KafkaConfig: &kafka.ConfigMap{
-                "bootstrap.servers": "0.0.0.0:19092",
-            },
-        },
-    },
-)
-
+```go
+client := rimbus.New()
 ```
 
 Publishing a message within the microservice is a two (2) step process.

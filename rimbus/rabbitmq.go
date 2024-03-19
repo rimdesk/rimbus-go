@@ -3,7 +3,6 @@ package rimbus
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"github.com/confluentinc/confluent-kafka-go/v2/kafka"
 	amqp "github.com/rabbitmq/amqp091-go"
 	"log"
@@ -13,7 +12,7 @@ import (
 )
 
 type RabbitMqClient struct {
-	cfg     *Params
+	cfg     *RabbitMQConfig
 	engine  *amqp.Connection
 	channel *amqp.Channel
 	queue   amqp.Queue
@@ -92,7 +91,7 @@ func (rabbit *RabbitMqClient) createChannel() error {
 func (rabbit *RabbitMqClient) createQueue() error {
 	var err error
 	rabbit.queue, err = rabbit.channel.QueueDeclare(
-		os.Getenv("BROKER.QUEUE"),
+		rabbit.cfg.Topic,
 		false,
 		false,
 		false,
@@ -107,20 +106,10 @@ func (rabbit *RabbitMqClient) createQueue() error {
 }
 
 func (rabbit *RabbitMqClient) GetDSN() string {
-	log.Println("Building RabbitMQ DSN in parts")
-	dsn := fmt.Sprintf("%s://%s:%s@%s:%s",
-		os.Getenv("BROKER.PROTOCOL"),
-		os.Getenv("BROKER.USER"),
-		os.Getenv("BROKER.PASSWORD"),
-		os.Getenv("BROKER.HOST"),
-		os.Getenv("BROKER.PORT"),
-	)
-
-	log.Printf("RabbitMQ DSN: %s\n", dsn)
-
-	return dsn
+	log.Printf("RabbitMQ DSN: %s\n", rabbit.cfg.Host)
+	return rabbit.cfg.Host
 }
 
-func NewRabbitMQClient(params *Params) MessageBusClient {
+func NewRabbitMQClient(params *RabbitMQConfig) MessageBusClient {
 	return &RabbitMqClient{cfg: params}
 }
