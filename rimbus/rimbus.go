@@ -2,7 +2,6 @@ package rimbus
 
 import (
 	"encoding/json"
-	"github.com/confluentinc/confluent-kafka-go/v2/kafka"
 	"github.com/spf13/viper"
 	"log"
 	"strings"
@@ -10,11 +9,19 @@ import (
 )
 
 type MessageBusClient interface {
-	Connect()
+	EstablishConnection()
 	Consume(topic string) (<-chan *MessageEvent, error)
 	GetDSN() string
 	GetEngine() interface{}
-	Publish(topic string, message *MessageEvent) (chan kafka.Event, error)
+	Publish(topic string, message *MessageEvent) (bool, error)
+}
+
+type BusEventResponse struct {
+}
+
+func (b BusEventResponse) String() string {
+	jb, _ := json.Marshal(b)
+	return string(jb)
 }
 
 type MessageEvent struct {
@@ -40,19 +47,43 @@ type DefaultConfig struct {
 	Engine string `mapstructure:"engine"`
 }
 
+type KafkaAuth struct {
+	SecurityProtocol string `mapstructure:"sasl_security_protocol"`
+	Mechanism        string `mapstructure:"sasl_mechanism"`
+	User             string `mapstructure:"username"`
+	Password         string `mapstructure:"password"`
+}
+
+type KafkaExtras struct {
+	JaasConfig string `mapstructure:"jaas_config"`
+}
+
 type KafkaConfig struct {
-	Servers  string   `mapstructure:"servers"`
-	Producer struct{} // Empty struct to handle empty sections
-	Consumer struct {
+	Servers      string   `mapstructure:"servers"`
+	AuthRequired bool     `mapstructure:"auth_required"`
+	Producer     struct{} // Empty struct to handle empty sections
+	Consumer     struct {
 		Group string `mapstructure:"group"`
 		Start string `mapstructure:"start"`
 	} `mapstructure:"consumer"`
+	Auth   *KafkaAuth `mapstructure:"auth"`
+	Extras struct {
+		JaasConfig string
+	} `mapstructure:"auth"`
+}
+
+type RabbitMqAuth struct {
+	User     string `mapstructure:"username"`
+	Password string `mapstructure:"password"`
 }
 
 type RabbitMQConfig struct {
-	Host     string `mapstructure:"host"`
-	Topic    string `mapstructure:"topic"`
-	Exchange string `mapstructure:"exchange"`
+	Host     string        `mapstructure:"host"`
+	Port     string        `mapstructure:"port"`
+	Queue    string        `mapstructure:"queue"`
+	Exchange string        `mapstructure:"exchange"`
+	Protocol string        `mapstructure:"protocol"`
+	Auth     *RabbitMqAuth `mapstructure:"auth"`
 }
 
 // Config represents the TOML configuration structure
@@ -82,7 +113,7 @@ func getConfig() *Config {
 	}
 
 	// Print out the parsed values
-	log.Printf("Engine: %s\n", cfg.Default.Engine)
+	log.Printf("[💨💨] Rimbus Engine Loaded: '%s' [💨💨]\n", cfg.Default.Engine)
 
 	return &cfg
 }
