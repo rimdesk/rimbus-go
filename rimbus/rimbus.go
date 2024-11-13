@@ -1,7 +1,9 @@
 package rimbus
 
 import (
+	"context"
 	"encoding/json"
+	amqp "github.com/rabbitmq/amqp091-go"
 	"github.com/spf13/viper"
 	"log"
 	"strings"
@@ -10,10 +12,10 @@ import (
 
 type MessageBusClient interface {
 	EstablishConnection()
-	Consume(topic string) (<-chan *MessageEvent, error)
+	Consume(topic string, options *ConsumeOptions) (<-chan *MessageEvent, error)
 	GetDSN() string
 	GetEngine() interface{}
-	Publish(topic string, message *MessageEvent) (bool, error)
+	Publish(topic string, message []byte, options *PublishOptions) (bool, error)
 }
 
 type BusEventResponse struct {
@@ -25,21 +27,48 @@ func (b BusEventResponse) String() string {
 }
 
 type MessageEvent struct {
-	Action      string         `json:"action,omitempty"`
-	Application string         `json:"application,omitempty"`
-	Event       string         `json:"event,omitempty"`
-	Metadata    map[string]any `json:"metadata,omitempty"`
-	Payload     map[string]any `json:"payload,omitempty"`
-	Timestamp   int64          `json:"timestamp,omitempty"`
+	Action       string            `json:"action,omitempty"`
+	Application  string            `json:"application,omitempty"`
+	Event        string            `json:"event,omitempty"`
+	Metadata     map[string]any    `json:"metadata,omitempty"`
+	Payload      []byte            `json:"payload,omitempty"`
+	Timestamp    int64             `json:"timestamp,omitempty"`
+	Acknowledger amqp.Acknowledger `json:"-"`
+	Tag          uint64            `json:"-"`
 }
 
-func New() MessageBusClient {
-	config := getConfig()
+type PublishOptions struct {
+	Args        map[string]interface{} `json:"args,omitempty"`
+	AutoDelete  bool                   `json:"auto_delete,omitempty"`
+	ContentType string                 `json:"content_type,omitempty"`
+	Durable     bool                   `json:"durable,omitempty"`
+	Exclusive   bool                   `json:"exclusive,omitempty"`
+	Exchange    string                 `json:"exchange,omitempty"`
+	Mandatory   bool                   `json:"mandatory,omitempty"`
+	NoWait      bool                   `json:"no_wait,omitempty"`
+	Immediately bool                   `json:"immediately,omitempty"`
+}
+
+type ConsumeOptions struct {
+	Args         map[string]interface{} `json:"args,omitempty"`
+	AutoAck      bool                   `json:"auto_ack,omitempty"`
+	AutoDelete   bool                   `json:"auto_delete,omitempty"`
+	ConsumerName string                 `json:"consumer_name,omitempty"`
+	Exchange     string                 `json:"exchange,omitempty"`
+	QueueName    string                 `json:"queue_name,omitempty"`
+	Durable      bool                   `json:"durable,omitempty"`
+	Exclusive    bool                   `json:"exclusive,omitempty"`
+	NoLocal      bool                   `json:"no_local,omitempty"`
+	NoWait       bool                   `json:"no_wait,omitempty"`
+}
+
+func New(ctx context.Context, environment string) MessageBusClient {
+	config := getConfig(environment)
 	switch strings.ToLower(config.Default.Engine) {
 	case "kafka":
-		return NewKafkaClient(config.Kafka)
+		return NewKafkaClient(ctx, config.Kafka)
 	default:
-		return NewRabbitMQClient(config.RabbitMQ)
+		return NewRabbitMQClient(ctx, config.RabbitMQ)
 	}
 }
 
@@ -81,7 +110,6 @@ type RabbitMQConfig struct {
 	Host     string        `mapstructure:"host"`
 	Port     string        `mapstructure:"port"`
 	Queue    string        `mapstructure:"queue"`
-	Exchange string        `mapstructure:"exchange"`
 	Protocol string        `mapstructure:"protocol"`
 	Auth     *RabbitMqAuth `mapstructure:"auth"`
 }
@@ -93,15 +121,20 @@ type Config struct {
 	RabbitMQ *RabbitMQConfig `mapstructure:"rabbitmq"`
 }
 
-func getConfig() *Config {
+func getConfig(environment string) *Config {
 	// Set the file name (config.toml) and path (current directory)
-	viper.SetConfigName("config")
+	if strings.ToLower(environment) != "development" {
+		viper.SetConfigName("config")
+	} else {
+		viper.SetConfigName("config.dev")
+	}
+
 	viper.SetConfigType("toml")
 	viper.AddConfigPath(".")
 
 	// Read the TOML configuration file
 	if err := viper.ReadInConfig(); err != nil {
-		log.Fatalf("‼️Error reading config file: %v", err)
+		log.Fatalf("‼️Error reading configuration: %v", err)
 	}
 
 	// Define a variable to store the configuration
@@ -129,7 +162,7 @@ func NewEvent(application, event, action string) *MessageEvent {
 	}
 }
 
-func NewEventWithPayload(application, event, action string, payload map[string]any) *MessageEvent {
+func NewEventWithPayload(application, event, action string, payload []byte) *MessageEvent {
 	return &MessageEvent{
 		Action:      action,
 		Application: application,
@@ -146,74 +179,6 @@ func (e MessageEvent) String() string {
 }
 
 const (
-	AppAccountTopic       string = "rimdesk.account"
-	AppAccountingTopic           = "rimdesk.accounting"
-	AppCompanyTopic              = "rimdesk.company"
-	AppHRTopic                   = "rimdesk.hr"
-	AppInventoryTopic            = "rimdesk.inventory"
-	AppProcurementTopic          = "rimdesk.procurement"
-	AppProductTopic              = "rimdesk.product"
-	AppProfileTopic              = "rimdesk.profile"
-	AppPurchaseOrderTopic        = "rimdesk.purchase_order"
-	AppSupplierTopic             = "rimdesk.supplier"
-	AppWarehouseTopic            = "rimdesk.warehouse"
-)
-
-const (
-	InventoryChangedEvent       string = "inventory.changed"
-	InventoryCreateEvent               = "inventory.create"
-	InventoryCreatedEvent              = "inventory.created"
-	InventoryDeleteEvent               = "inventory.delete"
-	InventoryDeletedEvent              = "inventory.deleted"
-	InventoryExportEvent               = "inventory.exported"
-	InventoryImportEvent               = "inventory.imported"
-	InventoryStockCreatedEvent         = "inventory.stock.created"
-	InventoryStockModifiedEvent        = "inventory.stock.modified"
-	InventoryStockReceivedEvent        = "inventory.stock.received"
-	InventoryStockTransferEvent        = "inventory.stock.transfer"
-	InventoryTrashedEvent              = "inventory.trashed"
-)
-
-const (
-	WarehouseCreateEvent  string = "warehouse.create"
-	WarehouseCreatedEvent        = "warehouse.created"
-)
-
-const (
-	ProductCreateEvent  string = "product.create"
-	ProductCreatedEvent        = "product.created"
-	ProductDeleteEvent         = "product.delete"
-	ProductDeletedEvent        = "product.deleted"
-	ProductTrashedEvent        = "product.trashed"
-)
-
-const (
-	ProfileCreatedEvent  string = "profile.created"
-	ProfileVerifiedEvent        = "profile.verified"
-)
-
-const (
-	SupplierApprovedEvent string = "supplier.approved"
-	SupplierCreatedEvent         = "supplier.created"
-	SupplierRejectedEvent        = "supplier.rejected"
-)
-
-const (
-	PurchaseOrderApprovedEvent string = "purchase_order.approved"
-	PurchaseOrderCreatedEvent         = "purchase_order.created"
-	PurchaseOrderReceivedEvent        = "purchase_order.received"
-	PurchaseOrderRejectedEvent        = "purchase_order.rejected"
-)
-
-const (
-	AccountServiceApi string = "accounting-api"
-	CompanyApi               = "company-api"
-	HRApi                    = "hr-api"
-	InventoryApi             = "inventory-api"
-	ProcurementApi           = "procurement-api"
-	ProductApi               = "product-api"
-	ProfileApi               = "profile-api"
-	PurchaseOrderApi         = "purchase-order-api"
-	SupplierApi              = "supplier-api"
-	WarehouseApi             = "warehouse-api"
+	Prod = "production"
+	Dev  = "development"
 )

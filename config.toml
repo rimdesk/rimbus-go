@@ -1,15 +1,16 @@
 [default]
-engine = "kafka"
+engine = "rabbitmq"
 
 [kafka]
-servers = "localhost:19092"
+servers = "kafka-controller-0.kafka-controller-headless.default.svc.cluster.local:9092,kafka-controller-1.kafka-controller-headless.default.svc.cluster.local:9092,kafka-controller-2.kafka-controller-headless.default.svc.cluster.local:9092"
 auth_required = true
+topics = ["rimdesk.categories"] # No working yet!
 
 [kafka.auth]
 sasl_security_protocol = "SASL_PLAINTEXT"
 sasl_mechanism = "SCRAM-SHA-256"
-username = ""
-password = ""
+username = "user1"
+password = "O1z9SUksfT"
 
 [kafka.extras]
 jaas_config = "apache.kafka.common.security.scram.ScramLoginModule required"
@@ -17,15 +18,15 @@ jaas_config = "apache.kafka.common.security.scram.ScramLoginModule required"
 [kafka.producer]
 
 [kafka.consumer]
-group = "product-api"
+group = "category-api"
 start = "earliest"
 
 [rabbitmq]
-host = "localhost"
-port = "5672"
+host = "b-f9fe0dfb-3b9b-41a5-8851-df0e2718c91f.mq.us-east-1.amazonaws.com"
+port = "5671"
 exchange = ""
-protocol = "amqp"
+protocol = "amqps"
 
 [rabbitmq.auth]
-username = "guest"
-password = "guest"
+username = "rimdesk"
+password = "Cg7!cwCvNro@@8VCdVe3A"
