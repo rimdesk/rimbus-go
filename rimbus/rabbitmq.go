@@ -4,82 +4,144 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	amqp "github.com/rabbitmq/amqp091-go"
 	"log"
 	"math"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 	"time"
+
+	amqp "github.com/rabbitmq/amqp091-go"
 )
 
 type RabbitMqClient struct {
 	cfg     *RabbitMQConfig
 	engine  *amqp.Connection
 	channel *amqp.Channel
+	ctx     context.Context
+	wg      sync.WaitGroup
+	mu      sync.Mutex // Protects channel and connection during reconnection
+
 }
 
-func (client *RabbitMqClient) Consume(topic string) (<-chan *MessageEvent, error) {
-	log.Printf("<[🔥]> Consuming messages from topic ::::: | %s <[🔥]> \n", topic)
+func (client *RabbitMqClient) reconnect() {
+	client.mu.Lock()
+	defer client.mu.Unlock()
 
-	// Setup RabbitMQ channel and other necessary configurations
+	var err error
+	var attempts int64 = 0
+	backOff := 1 * time.Second
+
+	for {
+		attempts++
+		client.engine, err = amqp.Dial(client.GetDSN())
+		if err == nil {
+			client.channel, err = client.engine.Channel()
+			if err == nil {
+				log.Println("✅ Reconnected to RabbitMQ successfully!")
+				return
+			}
+			log.Printf("‼️ Failed to create channel: %v\n", err)
+			client.engine.Close() // Close the connection if channel creation fails
+		}
+
+		if attempts > 5 {
+			log.Printf("‼️ Failed to reconnect after %d attempts: %v\n", attempts, err)
+			os.Exit(1)
+		}
+
+		backOff = time.Duration(attempts) * time.Second
+		log.Printf("Reconnection attempt %d failed, backing off for %v...\n", attempts, backOff)
+		time.Sleep(backOff)
+	}
+}
+
+func (client *RabbitMqClient) Consume(topicName string, opt *ConsumeOptions) (<-chan *MessageEvent, error) {
+	log.Printf("<[🔥]> Consuming messages from topicName: %s <[🔥]>\n", topicName)
+
+	// Declare queue
 	queue, err := client.channel.QueueDeclare(
-		topic, // name
-		false, // durable
-		false, // delete when unused
-		false, // exclusive
-		false, // no-wait
-		nil,   // arguments
+		topicName,      // name
+		opt.Durable,    // durable
+		opt.AutoDelete, // delete when unused
+		opt.Exclusive,  // exclusive
+		opt.NoWait,     // no-wait
+		opt.Args,       // arguments
 	)
 	if err != nil {
-		log.Println("‼️failed to declare queue topic ::::: |", err)
+		log.Printf("‼️ Failed to declare queue for topic %s: %v\n", topicName, err)
 		return nil, err
+	}
+
+	// Optional: Bind queue to exchange if needed
+	if opt.Exchange != "" {
+		if err := client.channel.QueueBind(
+			queue.Name,   // queue name
+			topicName,    // routing key
+			opt.Exchange, // exchange name
+			opt.NoWait,
+			opt.Args,
+		); err != nil {
+			log.Printf("‼️ Failed to bind queue to exchange for topic %s: %v\n", topicName, err)
+			return nil, err
+		}
 	}
 
 	messageEvents := make(chan *MessageEvent)
 
-	// Set up a channel for handling Ctrl-C, etc
+	// Signal handling for graceful shutdown
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 
-	// Start consuming messages
+	client.wg.Add(1) // Add to wait group for the consumer goroutine
+
 	go func() {
-		// Implement RabbitMQ message consumption logic here
+		defer client.wg.Done()     // Decrement wait group counter when the goroutine exits
+		defer close(messageEvents) // Close channel when done
+
 		for {
 			select {
 			case sig := <-sigChan:
-				log.Printf("‼️Caught signal %v: terminating\n", sig)
-				// Close connections and cleanup
+				log.Printf("‼️ Caught signal %v: initiating shutdown\n", sig)
+				client.Close() // Close the connection and channel
 				return
 			default:
-				// Consume messages from RabbitMQ
-				// Example code to consume messages
-				// Replace this with your RabbitMQ message consumption logic
-				// Consume message from RabbitMQ queue
+				// Check if the connection or channel is closed, and attempt reconnection if necessary
+				client.mu.Lock()
+				if client.channel == nil || client.channel.IsClosed() || client.engine.IsClosed() {
+					log.Println("‼️ Connection or channel closed, attempting to reconnect...")
+					client.reconnect() // Attempt to reconnect
+				}
+				client.mu.Unlock()
+
+				// Consume messages
 				messages, err := client.channel.Consume(
-					queue.Name, // queue name
-					"",         // consumer name
-					true,       // auto-acknowledge messages
-					false,      // exclusive
-					false,      // no-local
-					false,      // no-wait
-					nil,        // args
+					queue.Name,
+					opt.ConsumerName,
+					opt.AutoAck,
+					opt.Exclusive,
+					opt.NoLocal,
+					opt.NoWait,
+					opt.Args,
 				)
 				if err != nil {
-					log.Printf("‼️Failed to consume messages from RabbitMQ: %v\n", err)
+					log.Printf("‼️ Failed to consume messages: %v\n", err)
+					time.Sleep(1 * time.Second) // Retry delay
 					continue
 				}
 
 				for msg := range messages {
-					// Parse message body
 					evt := new(MessageEvent)
 					if err := json.Unmarshal(msg.Body, evt); err != nil {
-						log.Printf("‼️Failed to unmarshal message body: %v\n", err)
+						log.Printf("‼️ Failed to unmarshal message: %v\n", err)
 						continue
 					}
 
+					evt.Acknowledger = msg.Acknowledger
+					evt.Tag = msg.DeliveryTag
 					messageEvents <- evt
-					log.Printf("<[✈️]> Message sent to topic %s <[✈️]>\n", msg.RoutingKey)
+					log.Printf("<[✈️]> Message sent to topicName %s <[✈️]>\n", msg.RoutingKey)
 				}
 			}
 		}
@@ -88,28 +150,41 @@ func (client *RabbitMqClient) Consume(topic string) (<-chan *MessageEvent, error
 	return messageEvents, nil
 }
 
-func (client *RabbitMqClient) Publish(topic string, message *MessageEvent) (bool, error) {
-	// We create a Queue to send the message to.
+func (client *RabbitMqClient) Publish(topic string, message []byte, opt *PublishOptions) (bool, error) {
 	queue, err := client.channel.QueueDeclare(
-		topic, // name
-		false, // durable
-		false, // delete when unused
-		false, // exclusive
-		false, // no-wait
-		nil,   // arguments
+		topic,
+		opt.Durable,
+		opt.AutoDelete,
+		opt.Exclusive,
+		opt.NoWait,
+		opt.Args,
 	)
-
-	jb, err := json.Marshal(message)
 	if err != nil {
 		return false, err
 	}
 
-	if err := client.channel.PublishWithContext(context.Background(), client.cfg.Exchange,
-		queue.Name, false, false, amqp.Publishing{ContentType: "application/json", Body: jb}); err != nil {
+	// Optional: Bind the queue to the specified exchange if provided
+	if opt.Exchange != "" {
+		if err := client.channel.QueueBind(
+			queue.Name,   // queue name
+			topic,        // routing key (use topic as routing key)
+			opt.Exchange, // exchange name
+			opt.NoWait,   // no-wait
+			opt.Args,     // arguments
+		); err != nil {
+			log.Printf("‼️ Failed to bind queue to exchange %s for topic %s: %v\n", opt.Exchange, topic, err)
+			return false, err
+		}
+	}
+
+	if err := client.channel.PublishWithContext(client.ctx, opt.Exchange, queue.Name, opt.Mandatory, opt.Immediately, amqp.Publishing{
+		ContentType: opt.ContentType,
+		Body:        message,
+	}); err != nil {
 		return false, err
 	}
 
-	log.Printf("--- Sending to Queue: %s ---\n --- [x] Send %s--- \n", queue.Name, message)
+	log.Printf("--- Sent to Queue: %s --- [x] Sent %s ---\n", queue.Name, message)
 	return true, nil
 }
 
@@ -119,33 +194,33 @@ func (client *RabbitMqClient) GetEngine() interface{} {
 
 func (client *RabbitMqClient) EstablishConnection() {
 	var counts int64
-	var backOff = 1 * time.Second
+	backOff := 1 * time.Second
 
 	dsn := client.GetDSN()
 
 	for {
 		c, err := amqp.Dial(dsn)
 		if err != nil {
-			log.Println("RabbitMQ not yet ready to connect!", err)
+			log.Println("‼️RabbitMQ connection failed:", err)
 			counts++
 		} else {
-			log.Println("Connected to client successfully!")
+			log.Println("Connected to RabbitMQ!")
 			client.engine = c
 			break
 		}
 
 		if counts > 5 {
-			log.Println("failed to connect to rabbitmq:", err)
+			log.Println("‼️Failed to connect to RabbitMQ after multiple attempts:", err)
 			os.Exit(1)
 		}
 
 		backOff = time.Duration(math.Pow(float64(counts), 2)) * time.Second
-		log.Println("Backing off...")
+		log.Println("‼️Backing off...")
 		time.Sleep(backOff)
 	}
 
 	if err := client.createChannel(); err != nil {
-		log.Fatalln("failed to create channel:", err)
+		log.Fatalln("Failed to create channel:", err)
 	}
 }
 
@@ -153,16 +228,14 @@ func (client *RabbitMqClient) createChannel() error {
 	var err error
 	client.channel, err = client.engine.Channel()
 	if err != nil {
-		log.Println("‼️failed to create channel ::::: |", err)
+		log.Println("‼️ Failed to create channel:", err)
 		return err
 	}
-
 	return nil
 }
 
 func (client *RabbitMqClient) GetDSN() string {
-	dsn := fmt.Sprintf(
-		"%s://%s:%s@%s:%s/",
+	dsn := fmt.Sprintf("%s://%s:%s@%s:%s/",
 		client.cfg.Protocol,
 		client.cfg.Auth.User,
 		client.cfg.Auth.Password,
@@ -170,10 +243,27 @@ func (client *RabbitMqClient) GetDSN() string {
 		client.cfg.Port,
 	)
 	log.Printf("RabbitMQ DSN: %s\n", dsn)
-
 	return dsn
 }
 
-func NewRabbitMQClient(params *RabbitMQConfig) MessageBusClient {
-	return &RabbitMqClient{cfg: params}
+func (client *RabbitMqClient) Close() {
+	client.mu.Lock()
+	defer client.mu.Unlock()
+
+	if client.channel != nil && !client.channel.IsClosed() {
+		if err := client.channel.Close(); err != nil {
+			log.Printf("Failed to close RabbitMQ channel: %v\n", err)
+		}
+	}
+	if client.engine != nil && !client.engine.IsClosed() {
+		if err := client.engine.Close(); err != nil {
+			log.Printf("Failed to close RabbitMQ connection: %v\n", err)
+		}
+	}
+	client.wg.Wait() // Wait for all goroutines to finish
+}
+
+func NewRabbitMQClient(ctx context.Context, params *RabbitMQConfig) *RabbitMqClient {
+	client := &RabbitMqClient{cfg: params, ctx: ctx}
+	return client
 }

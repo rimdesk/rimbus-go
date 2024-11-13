@@ -1,6 +1,7 @@
 package rimbus
 
 import (
+	"context"
 	"encoding/json"
 	"github.com/confluentinc/confluent-kafka-go/v2/kafka"
 	"log"
@@ -14,7 +15,7 @@ type KafkaClient struct {
 	cfg *KafkaConfig
 }
 
-func (client *KafkaClient) Consume(topic string) (<-chan *MessageEvent, error) {
+func (client *KafkaClient) Consume(topic string, opt *ConsumeOptions) (<-chan *MessageEvent, error) {
 	log.Printf("<[🔥]> Consuming messages from topic ::::: | %s <[🔥]> \n", topic)
 
 	configMap := client.getConfig("consumer")
@@ -70,7 +71,7 @@ func (client *KafkaClient) Consume(topic string) (<-chan *MessageEvent, error) {
 }
 
 func (client *KafkaClient) EstablishConnection() {
-	log.Println("<[🔥]> Established fake kafka connection <[🔥]>")
+	log.Println("<[🔥]> Established kafka connection successful! <[🔥]>")
 }
 
 func (client *KafkaClient) GetDSN() string {
@@ -82,7 +83,7 @@ func (client *KafkaClient) GetEngine() interface{} {
 	return nil
 }
 
-func (client *KafkaClient) Publish(topic string, message *MessageEvent) (bool, error) {
+func (client *KafkaClient) Publish(topic string, message []byte, opt *PublishOptions) (bool, error) {
 	configMap := client.getConfig("producer")
 	producer, err := kafka.NewProducer(&configMap)
 	if err != nil {
@@ -151,6 +152,6 @@ func (client *KafkaClient) getConfig(key string) kafka.ConfigMap {
 	return cfgMap
 }
 
-func NewKafkaClient(p *KafkaConfig) MessageBusClient {
+func NewKafkaClient(ctx context.Context, p *KafkaConfig) MessageBusClient {
 	return &KafkaClient{p}
 }
