@@ -3,11 +3,13 @@ package rimbus
 import (
 	"context"
 	"encoding/json"
-	amqp "github.com/rabbitmq/amqp091-go"
-	"github.com/spf13/viper"
 	"log"
-	"strings"
+	"os"
 	"time"
+
+	_ "github.com/joho/godotenv/autoload"
+
+	amqp "github.com/rabbitmq/amqp091-go"
 )
 
 type MessageBusClient interface {
@@ -62,89 +64,86 @@ type ConsumeOptions struct {
 	NoWait       bool                   `json:"no_wait,omitempty"`
 }
 
-func New(ctx context.Context, environment string) MessageBusClient {
-	config := getConfig(environment)
-	switch strings.ToLower(config.Default.Engine) {
-	case "kafka":
-		return NewKafkaClient(ctx, config.Kafka)
+func New(ctx context.Context) MessageBusClient {
+	config := getConfig()
+	switch config.Default.Engine {
 	default:
-		return NewRabbitMQClient(ctx, config.RabbitMQ)
+		return NewRabbitMQClient(ctx, &config.RabbitMQ)
 	}
 }
 
+// DefaultConfig holds the default settings.
 type DefaultConfig struct {
 	Engine string `mapstructure:"engine"`
 }
 
+// KafkaAuth holds authentication details.
 type KafkaAuth struct {
 	SecurityProtocol string `mapstructure:"sasl_security_protocol"`
 	Mechanism        string `mapstructure:"sasl_mechanism"`
-	User             string `mapstructure:"username"`
+	Username         string `mapstructure:"username"`
 	Password         string `mapstructure:"password"`
 }
 
+// KafkaExtras holds additional settings.
 type KafkaExtras struct {
 	JaasConfig string `mapstructure:"jaas_config"`
 }
 
-type KafkaConfig struct {
-	Servers      string   `mapstructure:"servers"`
-	AuthRequired bool     `mapstructure:"auth_required"`
-	Producer     struct{} // Empty struct to handle empty sections
-	Consumer     struct {
-		Group string `mapstructure:"group"`
-		Start string `mapstructure:"start"`
-	} `mapstructure:"consumer"`
-	Auth   *KafkaAuth `mapstructure:"auth"`
-	Extras struct {
-		JaasConfig string
-	} `mapstructure:"auth"`
+// KafkaConsumer holds consumer settings.
+type KafkaConsumer struct {
+	Group string `mapstructure:"group"`
+	Start string `mapstructure:"start"`
 }
 
+// KafkaConfig holds Kafka settings.
+type KafkaConfig struct {
+	Servers      string        `mapstructure:"servers"`
+	AuthRequired bool          `mapstructure:"auth_required"`
+	Topics       []string      `mapstructure:"topics"`
+	Auth         KafkaAuth     `mapstructure:"auth"`
+	Extras       KafkaExtras   `mapstructure:"extras"`
+	Consumer     KafkaConsumer `mapstructure:"consumer"`
+}
+
+// RabbitMqAuth holds RabbitMQ authentication.
 type RabbitMqAuth struct {
-	User     string `mapstructure:"username"`
+	Username string `mapstructure:"username"`
 	Password string `mapstructure:"password"`
 }
 
+// RabbitMQConfig holds RabbitMQ configuration.
 type RabbitMQConfig struct {
-	Host     string        `mapstructure:"host"`
-	Port     string        `mapstructure:"port"`
-	Queue    string        `mapstructure:"queue"`
-	Protocol string        `mapstructure:"protocol"`
-	Auth     *RabbitMqAuth `mapstructure:"auth"`
+	Host     string       `mapstructure:"host"`
+	Port     string       `mapstructure:"port"`
+	Exchange string       `mapstructure:"exchange"`
+	Protocol string       `mapstructure:"protocol"`
+	Auth     RabbitMqAuth `mapstructure:"auth"`
 }
 
-// Config represents the TOML configuration structure
+// Config represents the entire configuration.
 type Config struct {
-	Default  *DefaultConfig  `mapstructure:"default"`
-	Kafka    *KafkaConfig    `mapstructure:"kafka"`
-	RabbitMQ *RabbitMQConfig `mapstructure:"rabbitmq"`
+	Default  DefaultConfig  `mapstructure:"default"`
+	Kafka    KafkaConfig    `mapstructure:"kafka"`
+	RabbitMQ RabbitMQConfig `mapstructure:"rabbitmq"`
 }
 
-func getConfig(environment string) *Config {
-	// Set the file name (config.toml) and path (current directory)
-	if strings.ToLower(environment) != "development" {
-		viper.SetConfigName("config")
-	} else {
-		viper.SetConfigName("config.dev")
+func getConfig() *Config {
+	cfg := Config{
+		Default: DefaultConfig{
+			Engine: os.Getenv("ENGINE"),
+		},
+		RabbitMQ: RabbitMQConfig{
+			Host:     os.Getenv("RABBITMQ_HOST"),
+			Port:     os.Getenv("RABBITMQ_PORT"),
+			Exchange: os.Getenv("RABBITMQ_EXCHANGE"),
+			Protocol: os.Getenv("RABBITMQ_SCHEME"),
+			Auth: RabbitMqAuth{
+				Username: os.Getenv("RABBITMQ_AUTH_USERNAME"),
+				Password: os.Getenv("RABBITMQ_AUTH_PASSWORD"),
+			},
+		},
 	}
-
-	viper.SetConfigType("toml")
-	viper.AddConfigPath(".")
-
-	// Read the TOML configuration file
-	if err := viper.ReadInConfig(); err != nil {
-		log.Fatalf("‼️Error reading configuration: %v", err)
-	}
-
-	// Define a variable to store the configuration
-	var cfg Config
-
-	// Unmarshal the configuration into the struct
-	if err := viper.Unmarshal(&cfg); err != nil {
-		log.Fatalf("‼️Error unmarshalling config: %v", err)
-	}
-
 	// Print out the parsed values
 	log.Printf("[💨💨] Rimbus Engine Loaded: '%s' [💨💨]\n", cfg.Default.Engine)
 

@@ -237,7 +237,7 @@ func (client *RabbitMqClient) createChannel() error {
 func (client *RabbitMqClient) GetDSN() string {
 	dsn := fmt.Sprintf("%s://%s:%s@%s:%s/",
 		client.cfg.Protocol,
-		client.cfg.Auth.User,
+		client.cfg.Auth.Username,
 		client.cfg.Auth.Password,
 		client.cfg.Host,
 		client.cfg.Port,

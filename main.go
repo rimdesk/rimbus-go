@@ -4,12 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/rimdesk/rimbus-go/rimbus"
 	"log"
+
+	"github.com/rimdesk/rimbus-go/rimbus"
 )
 
 func main() {
-	client := rimbus.New(context.TODO(), rimbus.Dev)
+	client := rimbus.New(context.TODO())
 	client.EstablishConnection() // Only necessary for RabbitMQ
 	event := rimbus.NewEvent("rimdesk.product-api", "rimdesk.inventory.create", "rimdesk.product.create")
 	event.Metadata = map[string]any{
